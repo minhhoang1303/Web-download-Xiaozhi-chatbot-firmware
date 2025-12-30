@@ -1,0 +1,892 @@
+// ESP32 Web Flasher JavaScript - MINH HOÀNG CƠ ĐIỆN TỬ
+import { ESPLoader, Transport } from "https://unpkg.com/esptool-js/bundle.js";
+
+// DOM Elements - Sử dụng ID đúng theo HTML mới
+const connectBtn = document.getElementById('connectBtn');
+const disconnectBtn = document.getElementById('disconnectBtn');
+const flashBtn = document.getElementById('flashBtn');
+const eraseBtn = document.getElementById('eraseBtn');
+const fileInput = document.getElementById('fileInput');
+const fileDrop = document.getElementById('fileDrop');
+const browseBtn = document.getElementById('browseBtn');
+const fileName = document.getElementById('fileName');
+const firmwareList = document.getElementById('firmwareList');
+const progressBar = document.getElementById('progressBar'); // Đã đổi từ #progress > i
+const percentEl = document.getElementById('percent');
+const logEl = document.getElementById('log');
+const chipInfoContainer = document.getElementById('chipInfoContainer'); // Đã đổi
+const chipInfoText = document.getElementById('chipInfoText'); // Thêm
+const speedInfo = document.getElementById('speedInfo');
+const clearLogBtn = document.getElementById('clearLogBtn');
+const openOfficialBtn = document.getElementById('openOfficialBtn');
+const flashAddressInput = document.getElementById('flashAddress');
+
+// Global Variables
+let device = null;
+let transport = null;
+let espLoader = null;
+let chip = null;
+let consoleBaudRate = 115200;
+let selectedFile = null;
+let startTime = 0;
+let firmwareDatabase = null;
+
+// Serial library compatibility
+const serialLib = !navigator.serial && navigator.usb ? serial : navigator.serial;
+
+// ESP Loader Terminal Interface
+const espLoaderTerminal = {
+    clean() {
+        logEl.textContent = 'Log đã được xóa.';
+    },
+    writeLine(data) {
+        log(data);
+    },
+    write(data) {
+        log(data);
+    },
+};
+
+// Utility Functions
+function log(...args) {
+    const timestamp = new Date().toLocaleTimeString();
+    const message = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    logEl.textContent += `\n[${timestamp}] ${message}`;
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(...args);
+}
+
+function setProgress(percentage, bytesWritten = 0, totalBytes = 0) {
+    if (progressBar) {
+        progressBar.style.width = percentage + '%';
+    }
+    
+    if (percentEl) {
+        percentEl.textContent = percentage.toFixed(1) + '%';
+    }
+    
+    if (bytesWritten && totalBytes && startTime) {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const speed = (bytesWritten / elapsed / 1024).toFixed(1);
+        const remaining = totalBytes - bytesWritten;
+        const eta = remaining / (bytesWritten / elapsed);
+        
+        if (speedInfo) {
+            speedInfo.textContent = `${speed} KB/s - ETA: ${eta.toFixed(0)}s`;
+        }
+    }
+}
+
+function updateConnectionStatus(connected, chipName = '') {
+    const indicator = chipInfoContainer ? chipInfoContainer.querySelector('.status-indicator') : null;
+    
+    if (connected) {
+        if (indicator) {
+            indicator.className = 'status-indicator status-connected';
+        }
+        if (chipInfoText) {
+            chipInfoText.textContent = `Kết nối: ${chipName}`;
+        }
+    } else {
+        if (indicator) {
+            indicator.className = 'status-indicator status-disconnected';
+        }
+        if (chipInfoText) {
+            chipInfoText.textContent = 'Chưa kết nối';
+        }
+    }
+}
+
+function enableControls(connected) {
+    flashBtn.disabled = !connected || !selectedFile;
+    eraseBtn.disabled = !connected;
+    disconnectBtn.disabled = !connected;
+    connectBtn.disabled = connected;
+}
+
+function handleFileSelect(file) {
+    if (!file) return;
+    
+    if (!file.name.endsWith('.bin')) {
+        alert('Chỉ chấp nhận file .bin');
+        return;
+    }
+    
+    if (file.size > 16 * 1024 * 1024) {
+        alert('File quá lớn (> 16MB)');
+        return;
+    }
+    
+    selectedFile = file;
+    
+    if (fileName) {
+        fileName.textContent = `📁 ${file.name} (${(file.size/1024/1024).toFixed(2)}MB)`;
+    }
+    
+    log(`Đã chọn file: ${file.name}`);
+    
+    if (espLoader) {
+        flashBtn.disabled = false;
+    }
+}
+
+function readUploadedFileAsBinaryString(inputFile) {
+    const reader = new FileReader();
+
+    return new Promise((resolve, reject) => {
+        reader.onerror = () => {
+            reader.abort();
+            reject(new DOMException("Problem parsing input file."));
+        };
+
+        reader.onload = () => {
+            resolve(reader.result);
+        };
+        reader.readAsBinaryString(inputFile);
+    });
+}
+
+function parseFlashAddress(addressStr) {
+    // Remove whitespace and convert to lowercase
+    addressStr = addressStr.trim().toLowerCase();
+    
+    // Check if it starts with 0x
+    if (!addressStr.startsWith('0x')) {
+        throw new Error('Địa chỉ flash phải bắt đầu bằng "0x" (ví dụ: 0x10000)');
+    }
+    
+    // Remove 0x prefix and validate hex format
+    const hexStr = addressStr.slice(2);
+    if (!/^[0-9a-f]+$/.test(hexStr)) {
+        throw new Error('Địa chỉ flash chứa ký tự không hợp lệ. Chỉ được phép sử dụng 0-9, A-F');
+    }
+    
+    // Convert to integer
+    const address = parseInt(addressStr, 16);
+    
+    // Validate address range (should be reasonable for ESP32)
+    if (address < 0 || address > 0x400000) { // 4MB max
+        throw new Error('Địa chỉ flash không hợp lệ (0x0 - 0x400000)');
+    }
+    
+    // Check alignment (should be divisible by 4096 for flash sectors)
+    if (address % 4096 !== 0) {
+        log(`⚠️ Cảnh báo: Địa chỉ ${addressStr} không căn chỉnh với sector (4KB). Khuyến nghị sử dụng địa chỉ chia hết cho 0x1000`);
+    }
+    
+    return address;
+}
+
+function getFlashSizeFromId(flashId) {
+    // Flash ID format: [Manufacturer ID][Memory Type][Capacity]
+    // Capacity byte determines flash size
+    const capacityByte = (flashId >> 16) & 0xFF;
+    
+    // Common flash size mappings based on JEDEC standard
+    const flashSizes = {
+        0x10: '64KB',    // 2^16 bytes
+        0x11: '128KB',   // 2^17 bytes  
+        0x12: '256KB',   // 2^18 bytes
+        0x13: '512KB',   // 2^19 bytes
+        0x14: '1MB',     // 2^20 bytes
+        0x15: '2MB',     // 2^21 bytes
+        0x16: '4MB',     // 2^22 bytes
+        0x17: '8MB',     // 2^23 bytes
+        0x18: '16MB',    // 2^24 bytes
+        0x19: '32MB',    // 2^25 bytes
+        0x1A: '64MB',    // 2^26 bytes
+    };
+    
+    const manufacturer = flashId & 0xFF;
+    const memoryType = (flashId >> 8) & 0xFF;
+    
+    // Log detailed flash information
+    log(`Flash Manufacturer ID: 0x${manufacturer.toString(16).padStart(2, '0').toUpperCase()}`);
+    log(`Flash Memory Type: 0x${memoryType.toString(16).padStart(2, '0').toUpperCase()}`);
+    log(`Flash Capacity Code: 0x${capacityByte.toString(16).padStart(2, '0').toUpperCase()}`);
+    
+    // Get manufacturer name (based on JEDEC standard)
+    const manufacturerNames = {
+        0x20: 'Micron/Numonyx/ST',
+        0x68: 'Boya',
+        0x85: 'Puya',
+        0x8C: 'ESMT',
+        0x9D: 'ISSI',
+        0x1C: 'EON',
+        0xC2: 'MXIC',
+        0xC8: 'GigaDevice', 
+        0xEF: 'Winbond'
+    };
+    
+    const manufacturerName = manufacturerNames[manufacturer] || `Unknown - ID 0x${manufacturer.toString(16).padStart(2, '0').toUpperCase()} (check JEDEC JEP106)`;
+    log(`Flash Manufacturer: ${manufacturerName}`);
+    
+    const flashSize = flashSizes[capacityByte];
+    if (flashSize) {
+        log(`Detected flash size: ${flashSize}`);
+        return flashSize;
+    } else {
+        log(`Unknown flash capacity code: 0x${capacityByte.toString(16).padStart(2, '0')}`);
+        return 'Unknown Size';
+    }
+}
+
+// Firmware Database Functions
+async function loadFirmwareDatabase() {
+    try {
+        log('Đang tải danh sách firmware...');
+        const response = await fetch('./firmware.json');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        firmwareDatabase = await response.json();
+        log(`✅ Đã tải ${firmwareDatabase.firmwareList.length} firmware từ database`);
+        
+        populateFirmwareList();
+        
+    } catch (error) {
+        log(`❌ Lỗi tải firmware database: ${error.message}`);
+        
+        // Fallback to default options
+        const fallbackOptions = [
+            { id: 'sample1', name: 'ESP32 Blink LED (Offline)', description: 'Sample firmware - offline mode' },
+            { id: 'sample2', name: 'ESP32 WiFi Scanner (Offline)', description: 'Sample firmware - offline mode' },
+            { id: 'sample3', name: 'ESP32 Web Server (Offline)', description: 'Sample firmware - offline mode' }
+        ];
+        
+        const firmwareListEl = document.getElementById('firmwareList');
+        if (firmwareListEl) {
+            firmwareListEl.innerHTML = '<option value="">-- Chọn firmware mẫu (offline) --</option>';
+            
+            fallbackOptions.forEach(fw => {
+                const option = document.createElement('option');
+                option.value = fw.id;
+                option.textContent = fw.name;
+                firmwareListEl.appendChild(option);
+            });
+        }
+    }
+}
+
+function populateFirmwareList() {
+    const firmwareListEl = document.getElementById('firmwareList');
+    if (!firmwareListEl) return;
+    
+    // Clear loading state
+    firmwareListEl.innerHTML = '<option value="">-- Chọn firmware từ danh sách --</option>';
+    
+    // Group by category
+    const categories = {};
+    firmwareDatabase.firmwareList.forEach(fw => {
+        if (!categories[fw.category]) {
+            categories[fw.category] = [];
+        }
+        categories[fw.category].push(fw);
+    });
+    
+    // Add options grouped by category
+    Object.keys(categories).sort().forEach(category => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = category;
+        
+        categories[category].forEach(fw => {
+            const option = document.createElement('option');
+            option.value = fw.id;
+            option.textContent = `${fw.name} (${fw.size})`;
+            option.dataset.firmware = JSON.stringify(fw);
+            optgroup.appendChild(option);
+        });
+        
+        firmwareListEl.appendChild(optgroup);
+    });
+}
+
+function showFirmwareInfo(firmware) {
+    const firmwareInfo = document.getElementById('firmwareInfo');
+    const firmwareName = document.getElementById('firmwareName');
+    const firmwareDescription = document.getElementById('firmwareDescription');
+    const firmwareSize = document.getElementById('firmwareSize');
+    const firmwareAddress = document.getElementById('firmwareAddress');
+    const firmwareVersion = document.getElementById('firmwareVersion');
+    
+    // Hardware info elements
+    const hardwareInfo = document.getElementById('hardwareInfo');
+    const hardwareChip = document.getElementById('hardwareChip');
+    const hardwareFlashSize = document.getElementById('hardwareFlashSize');
+    const hardwareBoards = document.getElementById('hardwareBoards');
+    const hardwareSpecialFeatures = document.getElementById('hardwareSpecialFeatures');
+    const specialFeaturesList = document.getElementById('specialFeaturesList');
+    const schematicLink = document.getElementById('schematicLink');
+
+    if (!firmware) {
+        if (firmwareInfo) {
+            firmwareInfo.classList.add('d-none');
+        }
+        return;
+    }
+    
+    // Basic firmware info
+    if (firmwareName) firmwareName.textContent = firmware.name;
+    if (firmwareDescription) firmwareDescription.textContent = firmware.description;
+    if (firmwareSize) firmwareSize.textContent = firmware.size;
+    if (firmwareAddress) firmwareAddress.textContent = firmware.flashAddress;
+    if (firmwareVersion) firmwareVersion.textContent = `v${firmware.version}`;
+    
+    // Hardware info
+    if (firmware.hardware_info) {
+        const hwInfo = firmware.hardware_info;
+        
+        if (hardwareChip) hardwareChip.textContent = hwInfo.chip || firmware.hardware_version || 'Unknown';
+        if (hardwareFlashSize) hardwareFlashSize.textContent = hwInfo.flash_size || 'N/A';
+        
+        // Compatible boards
+        if (hardwareBoards) {
+            if (hwInfo.compatible_boards && hwInfo.compatible_boards.length > 0) {
+                hardwareBoards.textContent = hwInfo.compatible_boards.join(', ');
+            } else {
+                hardwareBoards.textContent = 'N/A';
+            }
+        }
+        
+        // Special features
+        if (hwInfo.special_features && hwInfo.special_features.length > 0) {
+            if (specialFeaturesList) specialFeaturesList.textContent = hwInfo.special_features.join(', ');
+            if (hardwareSpecialFeatures) hardwareSpecialFeatures.classList.remove('d-none');
+        } else {
+            if (hardwareSpecialFeatures) hardwareSpecialFeatures.classList.add('d-none');
+        }
+        
+        if (hardwareInfo) hardwareInfo.classList.remove('d-none');
+    } else {
+        // If no hardware info, show basic hardware version if available
+        if (firmware.hardware_version) {
+            if (hardwareChip) hardwareChip.textContent = firmware.hardware_version;
+            if (hardwareFlashSize) hardwareFlashSize.textContent = 'N/A';
+            if (hardwareBoards) hardwareBoards.textContent = 'N/A';
+            if (hardwareSpecialFeatures) hardwareSpecialFeatures.classList.add('d-none');
+            if (hardwareInfo) hardwareInfo.classList.remove('d-none');
+        } else {
+            if (hardwareInfo) hardwareInfo.classList.add('d-none');
+        }
+    }
+    
+    // Schematic link
+    if (schematicLink) {
+        if (firmware.schematic) {
+            schematicLink.href = firmware.schematic;
+            schematicLink.classList.remove('d-none');
+        } else {
+            schematicLink.classList.add('d-none');
+        }
+    }
+    
+    // Update flash address input
+    if (flashAddressInput) {
+        flashAddressInput.value = firmware.flashAddress;
+        // Trigger validation
+        flashAddressInput.dispatchEvent(new Event('input'));
+    }
+    
+    if (firmwareInfo) {
+        firmwareInfo.classList.remove('d-none');
+    }
+}
+
+async function downloadFirmware(firmware) {
+    try {
+        log(`📥 Đang tải firmware: ${firmware.name}`);
+        
+        let url = firmware.path;
+        let fallbackUrls = [];
+        
+        // Handle different path types and create fallback URLs
+        if (url.startsWith('local://')) {
+            // Local file path - remove local:// prefix and use relative path
+            url = './' + url.replace('local://', '');
+            log(`📁 Đường dẫn local: ${url}`);
+        } else if (url.startsWith('http://') || url.startsWith('https://')) {
+            log(`🌐 Đường dẫn remote: ${url}`);
+            
+            // Create fallback URLs for GitHub
+            if (url.includes('github.com')) {
+                if (url.includes('jsdelivr.net')) {
+                    // If using jsdelivr, try raw GitHub as fallback
+                    fallbackUrls.push(url.replace('https://cdn.jsdelivr.net/gh/', 'https://github.com/').replace('@master', '/raw/master'));
+                } else if (url.includes('/raw/')) {
+                    // If using raw, try jsdelivr as fallback
+                    fallbackUrls.push(url.replace('https://github.com/', 'https://cdn.jsdelivr.net/gh/').replace('/raw/master', '@master'));
+                } else if (url.includes('/blob/')) {
+                    // Convert blob to raw and add jsdelivr fallback
+                    const rawUrl = url.replace('/blob/', '/raw/');
+                    fallbackUrls.push(rawUrl);
+                    fallbackUrls.push(rawUrl.replace('https://github.com/', 'https://cdn.jsdelivr.net/gh/').replace('/raw/master', '@master'));
+                }
+            }
+        } else {
+            throw new Error('Định dạng đường dẫn không hợp lệ');
+        }
+        
+        // Try main URL first, then fallbacks
+        const urlsToTry = [url, ...fallbackUrls];
+        let lastError = null;
+        
+        for (let i = 0; i < urlsToTry.length; i++) {
+            const tryUrl = urlsToTry[i];
+            try {
+                log(`🔄 Thử tải từ: ${tryUrl}`);
+                
+                const response = await fetch(tryUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/octet-stream',
+                    },
+                    mode: 'cors',
+                    cache: 'no-cache'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                log(`📋 Content-Type: ${contentType}`);
+                
+                const arrayBuffer = await response.arrayBuffer();
+                
+                if (arrayBuffer.byteLength === 0) {
+                    throw new Error('File rỗng (0 bytes)');
+                }
+                
+                const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+                const file = new File([blob], firmware.filename, { type: 'application/octet-stream' });
+                
+                log(`✅ Đã tải thành công: ${firmware.filename} (${(arrayBuffer.byteLength / 1024).toFixed(1)}KB)`);
+                
+                return file;
+                
+            } catch (error) {
+                lastError = error;
+                log(`⚠️ Thất bại với URL ${i + 1}/${urlsToTry.length}: ${error.message}`);
+                
+                if (i < urlsToTry.length - 1) {
+                    log(`🔄 Thử URL tiếp theo...`);
+                }
+            }
+        }
+        
+        // All URLs failed
+        throw lastError || new Error('Không thể tải firmware từ bất kỳ URL nào');
+        
+    } catch (error) {
+        log(`❌ Lỗi tải firmware: ${error.message}`);
+        
+        // Detailed error logging
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            log(`💡 Gợi ý: Kiểm tra kết nối mạng hoặc CORS policy`);
+        } else if (error.message.includes('404')) {
+            log(`💡 Gợi ý: File không tồn tại trên server`);
+        } else if (error.message.includes('403')) {
+            log(`💡 Gợi ý: Không có quyền truy cập file`);
+        }
+        
+        throw error;
+    }
+}
+
+// Event Listeners
+if (browseBtn) {
+    browseBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (fileInput) fileInput.click();
+    });
+}
+
+if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+        handleFileSelect(e.target.files[0]);
+    });
+}
+
+// Drag & Drop
+if (fileDrop) {
+    fileDrop.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fileDrop.classList.add('dragover');
+    });
+
+    fileDrop.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        fileDrop.classList.remove('dragover');
+    });
+
+    fileDrop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fileDrop.classList.remove('dragover');
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFileSelect(files[0]);
+        }
+    });
+}
+
+// Flash address input validation
+if (flashAddressInput) {
+    flashAddressInput.addEventListener('input', (e) => {
+        const value = e.target.value.trim();
+        
+        // Reset styles
+        e.target.style.borderColor = '';
+        e.target.style.backgroundColor = '';
+        
+        if (value === '') {
+            e.target.style.borderColor = '#ef4444';
+            return;
+        }
+        
+        try {
+            parseFlashAddress(value);
+            // Valid address
+            e.target.style.borderColor = '#10b981';
+            e.target.style.backgroundColor = '#f0fdf4';
+        } catch (error) {
+            // Invalid address
+            e.target.style.borderColor = '#ef4444';
+            e.target.style.backgroundColor = '#fef2f2';
+        }
+    });
+}
+
+// Add some common flash addresses as suggestions
+if (flashAddressInput) {
+    flashAddressInput.addEventListener('focus', (e) => {
+        if (!e.target.hasAttribute('data-initialized')) {
+            e.target.setAttribute('data-initialized', 'true');
+            e.target.setAttribute('title', 'Địa chỉ thông dụng:\n0x1000 - Bootloader\n0x8000 - Partition table\n0x10000 - Application (mặc định)\n0x110000 - OTA app partition');
+        }
+    });
+}
+
+// Connection
+if (connectBtn) {
+    connectBtn.addEventListener('click', async () => {
+        try {
+            log('Đang yêu cầu kết nối thiết bị...');
+            if (device === null) {
+                device = await serialLib.requestPort({});
+                transport = new Transport(device, true);
+            }
+
+            const loaderOptions = {
+                transport: transport,
+                baudrate: consoleBaudRate,
+                terminal: espLoaderTerminal,
+                debugLogging: false,
+            };
+
+            espLoader = new ESPLoader(loaderOptions);
+            chip = await espLoader.main();
+            
+            const chipName = espLoader.chip.CHIP_NAME || 'ESP32';
+            log(`Kết nối thành công với ${chipName}`);
+            
+            // Read flash ID to get accurate flash size
+            log('Đang đọc thông tin flash memory...');
+            try {
+                const flashId = await espLoader.readFlashId();
+                log(`Flash ID: 0x${flashId.toString(16).padStart(6, '0').toUpperCase()}`);
+                
+                // Extract flash size from flash ID
+                const flashSize = getFlashSizeFromId(flashId);
+                
+                updateConnectionStatus(true, `${chipName} (${flashSize})`);
+            } catch (flashError) {
+                log(`Không thể đọc flash ID: ${flashError.message}`);
+                log('Sử dụng thông tin flash mặc định');
+                updateConnectionStatus(true, `${chipName} (Flash: Unknown)`);
+            }
+            
+            enableControls(true);
+            
+        } catch (err) {
+            log('Lỗi kết nối:', err.message);
+            alert('Lỗi kết nối: ' + err.message);
+            updateConnectionStatus(false);
+            enableControls(false);
+        }
+    });
+}
+
+if (disconnectBtn) {
+    disconnectBtn.addEventListener('click', async () => {
+        if (transport) await transport.disconnect();
+
+        espLoader = null;
+        device = null;
+        transport = null;
+        chip = null;
+        
+        log('Đã ngắt kết nối');
+        updateConnectionStatus(false);
+        enableControls(false);
+        setProgress(0);
+        if (speedInfo) speedInfo.textContent = 'Tốc độ: --';
+    });
+}
+
+// Erase flash
+if (eraseBtn) {
+    eraseBtn.addEventListener('click', async () => {
+        if (!espLoader) return alert('Chưa kết nối thiết bị');
+        
+        if (!confirm('Bạn có chắc muốn xóa toàn bộ flash memory?')) return;
+        
+        try {
+            log('Bắt đầu xóa flash memory...');
+            setProgress(0);
+            
+            await espLoader.eraseFlash();
+            
+            setProgress(100);
+            log('Xóa flash thành công!');
+            
+        } catch (err) {
+            log('Lỗi xóa flash:', err.message);
+            alert('Lỗi: ' + err.message);
+        }
+    });
+}
+
+// Flash firmware
+if (flashBtn) {
+    flashBtn.addEventListener('click', async () => {
+        if (!espLoader) return alert('Chưa kết nối thiết bị');
+        if (!selectedFile) return alert('Chưa chọn file firmware');
+        
+        const flashStatusNotification = document.getElementById('flashStatusNotification');
+        
+        try {
+            // Show flash status notification
+            if (flashStatusNotification) {
+                flashStatusNotification.classList.remove('d-none');
+            }
+            
+            log(`Bắt đầu nạp firmware: ${selectedFile.name}`);
+            setProgress(0);
+            startTime = Date.now();
+            
+            let fileData = await readUploadedFileAsBinaryString(selectedFile);
+            log(`Đã đọc file: ${fileData.length} bytes`);
+            
+            // Parse flash address from input
+            let flashAddress;
+            try {
+                flashAddress = parseFlashAddress(flashAddressInput.value);
+                log(`Địa chỉ flash: ${flashAddressInput.value} (${flashAddress})`);
+            } catch (error) {
+                alert('Lỗi địa chỉ flash: ' + error.message);
+                return;
+            }
+
+            const fileArray = [];
+            fileArray.push({ data: fileData, address: flashAddress });
+
+            const flashOptions = {
+                fileArray: fileArray,
+                flashSize: "keep",
+                flashMode: undefined,
+                flashFreq: undefined,
+                eraseAll: false,
+                compress: true,
+                reportProgress: (fileIndex, written, total) => {
+                    const progress = Math.round((written / total) * 100);
+                    setProgress(progress, written, total);
+                },
+                calculateMD5Hash: (image) => CryptoJS.MD5(CryptoJS.enc.Latin1.parse(image)),
+            };
+            
+            log('⚠️ Bắt đầu ghi flash, vui lòng chờ đến khi có thông báo hoàn thành...');
+            await espLoader.writeFlash(flashOptions);
+            
+            setProgress(100);
+            
+            // Hide flash status notification on success
+            if (flashStatusNotification) {
+                flashStatusNotification.classList.add('d-none');
+            }
+            
+            log('Nạp firmware thành công!');
+            log('Bạn có thể reset ESP32 để chạy firmware mới');
+            
+            // Reset the device
+            if (confirm('Nạp thành công! Bạn có muốn reset ESP32 không?')) {
+                try {
+                    if (transport) {
+                        await transport.disconnect();
+                    }
+                    await transport.connect(consoleBaudRate);
+                    await transport.setDTR(false);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await transport.setDTR(true);
+                    log('Đã reset ESP32');
+                } catch (resetErr) {
+                    log('Không thể reset tự động, vui lòng reset thủ công');
+                }
+            }
+            
+        } catch (err) {
+            // Hide flash status notification on error
+            const flashStatusNotification = document.getElementById('flashStatusNotification');
+            if (flashStatusNotification) {
+                flashStatusNotification.classList.add('d-none');
+            }
+            
+            log('Lỗi nạp firmware:', err.message);
+            alert('Lỗi nạp firmware: ' + err.message);
+        }
+    });
+}
+
+// Firmware selection from database
+if (firmwareList) {
+    firmwareList.addEventListener('change', async (e) => {
+        const selected = e.target.value;
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        
+        if (!selected) {
+            showFirmwareInfo(null);
+            return;
+        }
+        
+        // Check if it's a fallback option (offline mode)
+        if (selected.startsWith('sample')) {
+            log(`Đang tải firmware mẫu (offline): ${selectedOption.textContent}`);
+            
+            // Create a sample firmware file for offline mode
+            const sampleData = new Uint8Array(1024); // 1KB sample
+            sampleData.fill(0xFF); // Fill with 0xFF (typical for flash)
+            
+            const blob = new Blob([sampleData], { type: 'application/octet-stream' });
+            const file = new File([blob], `${selected}.bin`, { type: 'application/octet-stream' });
+            
+            handleFileSelect(file);
+            
+            // Reset selection
+            e.target.value = '';
+            return;
+        }
+        
+        try {
+            // Parse firmware data from dataset
+            const firmware = JSON.parse(selectedOption.dataset.firmware);
+            
+            // Show firmware info
+            showFirmwareInfo(firmware);
+            
+            // Download and select firmware
+            const file = await downloadFirmware(firmware);
+            handleFileSelect(file);
+            
+            // Keep firmware info visible after successful download
+            // Reset only the selection dropdown
+            setTimeout(() => {
+                e.target.value = '';
+            }, 100);
+            
+        } catch (error) {
+            alert(`Lỗi tải firmware: ${error.message}`);
+            log(`❌ Chi tiết lỗi: ${error.stack || error.message}`);
+            
+            // Hide firmware info only on error
+            setTimeout(() => {
+                e.target.value = '';
+                showFirmwareInfo(null);
+            }, 100);
+        }
+    });
+}
+
+// Clear log
+if (clearLogBtn) {
+    clearLogBtn.addEventListener('click', () => {
+        if (logEl) {
+            logEl.textContent = 'MINH HOÀNG CƠ ĐIỆN TỬ Flasher - Log đã được xóa.';
+        }
+    });
+}
+
+// Clear firmware info
+const clearFirmwareInfoBtn = document.getElementById('clearFirmwareInfo');
+if (clearFirmwareInfoBtn) {
+    clearFirmwareInfoBtn.addEventListener('click', () => {
+        showFirmwareInfo(null);
+        log('Đã ẩn thông tin firmware');
+    });
+}
+
+// Open official tool
+if (openOfficialBtn) {
+    openOfficialBtn.addEventListener('click', () => {
+        window.open('https://espressif.github.io/esptool-js/', '_blank');
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+    log('MINH HOÀNG CƠ ĐIỆN TỬ Flasher đã sẵn sàng');
+    
+    // Load firmware database
+    await loadFirmwareDatabase();
+
+    // Xử lý URL parameter
+    const searchParams = new URLSearchParams(window.location.search);
+    let firmwareName = searchParams.get('name');
+
+    if (!firmwareName) {
+        const hash = window.location.hash.substring(1);
+        const hashParams = new URLSearchParams(hash);
+        firmwareName = hashParams.get('name');
+    }
+
+    if (firmwareName && firmwareList) {
+        setTimeout(() => {
+            for (let option of firmwareList.options) {
+                const fw = option.dataset.firmware ? JSON.parse(option.dataset.firmware) : null;
+                if (!fw) continue;
+
+                if (fw.id === firmwareName || fw.name === firmwareName) {
+                    firmwareList.value = option.value;
+                    firmwareList.dispatchEvent(new Event('change'));
+                    log(`✅ Đã tự động chọn firmware từ URL: ${firmwareName}`);
+                    break;
+                }
+            }
+        }, 300);
+    }
+    
+    // Kiểm tra trình duyệt hỗ trợ
+    const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+    const isEdge = /Edg/.test(navigator.userAgent);
+    
+    if (!isChrome && !isEdge) {
+        log('⚠️ Cảnh báo: Trang web hoạt động tốt nhất trên Chrome hoặc Edge');
+        log('💡 Gợi ý: Sử dụng Chrome/Edge để có trải nghiệm tốt nhất');
+    }
+});
+
+// Thêm hiệu ứng khi hover vào các nút
+document.addEventListener('DOMContentLoaded', function() {
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.transition = 'transform 0.2s ease';
+        });
+        
+        btn.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+});

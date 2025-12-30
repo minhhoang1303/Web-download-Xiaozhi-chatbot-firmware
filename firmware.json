@@ -1,0 +1,99 @@
+{
+  "firmwareList": [
+    {
+      "id": "Mini_C3_4MB",
+      "name": "ESP32C3_Mini_C3_4MB",
+      "filename": "C3_mini.bin",
+      "flashAddress": "0x0",
+      "path": "https://raw.githubusercontent.com/minhhoang1303/Chatbot-firmware-xiaozhi/main/C3_mini.bin",
+      "size": "2,950KB",
+      "version": "2.0.4",
+      "category": "ESP32 C3 mini",
+      "description": "Firmware cho board ESP32-C3 Mini với 4MB Flash",
+      "hardware_info": {
+        "chip": "ESP32-C3_mini",
+        "flash_size": "4MB",
+        "compatible_boards": [
+          "ESP32-C3-Mini ; Đánh thức: Hi, ESP"
+        ]
+      },
+      "schematic": "https://drive.google.com/file/d/1lu5eoz0dsdajUzSBoZ7kqrXepKKL6S5j/view?usp=drive_link"
+    },
+    {
+      "id": "C3mini_Add_3_Tool",
+      "name": "ESP32C3_Mini_C3_4MB_ADD_3_TOOL",
+      "filename": "C3_mini_add_3_tool.bin",
+      "flashAddress": "0x0",
+      "path": "https://raw.githubusercontent.com/minhhoang1303/Chatbot-firmware-xiaozhi/main/c3mini_add3tool.bin",
+      "size": "2.75MB",
+      "version": "2.0.4",
+      "category": "ESP32 C3 mini",
+      "description": "Firmware cho board ESP32-C3 Mini với 4MB Flash",
+      "hardware_info": {
+        "chip": "ESP32-C3_mini",
+        "flash_size": "4MB",
+        "compatible_boards": [
+          "ESP32-C3-Mini ; Tool Đọc tin tức mới nhất từ VNEXPRESS, Giá vàng, Kết quả xổ số 3 miền"
+        ]
+      },
+      "schematic": "https://drive.google.com/file/d/1lu5eoz0dsdajUzSBoZ7kqrXepKKL6S5j/view?usp=drive_link"
+    },
+    {
+      "id": "ESP32-S3",
+      "name": "RoBot OTTO",
+      "filename": "S3_mini_8MB.bin",
+      "flashAddress": "0x0",
+      "path": "https://raw.githubusercontent.com/minhhoang1303/Chatbot-firmware-xiaozhi/main/S3otto.bin",
+      "size": "3.2MB",
+      "version": "2.0.4",
+      "category": "ESP32 S3",
+      "description": "Firmware cho board ESP32-S3 N16R8; Có thể nạp dùng không cần gắn Servo",
+      "hardware_info": {
+        "chip": "ESP32-S3 N16R8",
+        "flash_size": "16MB",
+        "compatible_boards": [
+          "ESP32-S3 N16R8 ; Chức năng: Phát nhạc, kể chuyển,...bằng audio từ YOUTUBE; Phát nhạc từ Zing Mp3; Radio trực tuyến; Đọc tin tức"
+        ]
+      },
+      "schematic": "https://drive.google.com/file/d/1xWO8O6Ih3a9RSPkjNdU72d_hezWdOoeo/view?usp=drive_link"
+    },
+    {
+      "id": "ESP32-S3_LCD 1.44",
+      "name": "ESP32S3-LCD 1.44 inch TFT ST7735",
+      "filename": "S3-128x128_CR7.bin",
+      "flashAddress": "0x0",
+      "path": "https://raw.githubusercontent.com/minhhoang1303/Chatbot-firmware-xiaozhi/main/S3-128x128_CR7.bin",
+      "size": "8.82MB",
+      "version": "2.0.4",
+      "category": "ESP32 S3",
+      "description": "LCD 1.44 inch TFT 128x128 ST7735",
+      "hardware_info": {
+        "chip": "ESP32-S3 N16R8",
+        "flash_size": "16MB",
+        "compatible_boards": [
+          "ESP32S3-LCD 1.44 inch TFT ST7735;Chức năng: Phát nhạc, kể chuyển,...bằng audio từ YOUTUBE; Phát nhạc từ Zing Mp3; Radio trực tuyến; Đọc tin tức; Đặt báo thức  "
+        ]
+      },
+      "schematic": "https://drive.google.com/file/d/1RH4CFaQvuJ0M_2gA0rblOq_DZhkwaC8O/view?usp=drive_link"
+    },
+    {
+      "id": "ESP32-S3_LCD 1.54",
+      "name": "ESP32S3-LCD 1.54 inch TFT ST7735",
+      "filename": "S3-240x240.bin",
+      "flashAddress": "0x0",
+      "path": "https://raw.githubusercontent.com/minhhoang1303/Chatbot-firmware-xiaozhi/main/S3-240x240.bin",
+      "size": "8.85 MB",
+      "version": "2.0.4",
+      "category": "ESP32 S3",
+      "description": "LCD 1.44 inch TFT 240x240 ST7789",
+      "hardware_info": {
+        "chip": "ESP32-S3 N16R8",
+        "flash_size": "16MB",
+        "compatible_boards": [
+          "ESP32S3-LCD 1.54 inch TFT ST7789;Chức năng: Phát nhạc, kể chuyển,...bằng audio từ YOUTUBE; Phát nhạc từ Zing Mp3; Radio trực tuyến; Đọc tin tức; Đặt báo thức  "
+        ]
+      },
+      "schematic": "https://drive.google.com/file/d/1QutQnxjJURwCnjVpaI5DigpxEt0lOEA0/view?usp=drive_link"
+    }
+  ]
+}

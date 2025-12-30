@@ -1,0 +1,727 @@
+/* ========================================
+   MINH HOÀNG CƠ ĐIỆN TỬ - ESP32 Web Flasher
+   Giao diện chuyên nghiệp - Tối ưu hiển thị
+   ======================================== */
+
+/* ========== CSS Variables ========== */
+:root {
+  /* Màu chủ đạo MINH HOÀNG CƠ ĐIỆN TỬ */
+  --mh-primary: #ff8c00; /* Màu cam đậm hơn cho Primary (Giao diện màu cam) */
+  --mh-secondary: #ffa500; /* Màu cam nhạt hơn cho Secondary */
+  --mh-accent: #1e90ff; /* Màu xanh da trời cho Accent (Có thể dùng làm nền) */
+  --mh-success: #27ae60;
+  --mh-warning: #f39c12;
+  --mh-danger: #e74c3c;
+  --mh-light: #f5f5f5; /* Màu sáng, giữ gần trắng */
+  --mh-dark: #cc7000; /* Màu cam tối hơn */
+  
+  /* Gradient Background */
+  --bg-gradient-start: #4682b4; /* Xanh da trời nhạt hơn (Sky Blue) */
+  --bg-gradient-mid: #1e90ff; /* Xanh da trời trung bình (Dodger Blue) - Nền */
+  --bg-gradient-end: #0000ff; /* Xanh dương đậm hơn (Blue) */
+  
+  /* Card Colors */
+  --card-bg: #ffffff;
+  --card-shadow: rgba(255, 140, 0, 0.3); /* Đổi bóng card sang tông cam */
+  
+  /* Text Colors */
+  --text-primary: #ff8c00; /* Màu cam cho Primary Text */
+  --text-secondary: #cc7000;
+  --text-muted: #7f8c8d;
+  --text-light: #ecf0f1;
+  
+  /* Status Colors (Giữ nguyên cho các trạng thái thông thường) */
+  --status-connected: #27ae60;
+  --status-disconnected: #e74c3c;
+  --status-warning: #f39c12;
+  --status-info: #3498db;
+  
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(255, 140, 0, 0.1); /* Chỉnh bóng theo tông cam */
+  --shadow-md: 0 4px 6px -1px rgba(255, 140, 0, 0.15), 0 2px 4px -1px rgba(255, 140, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(255, 140, 0, 0.2), 0 4px 6px -2px rgba(255, 140, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(255, 140, 0, 0.25), 0 10px 10px -5px rgba(255, 140, 0, 0.15);
+  
+  /* Border Radius */
+  --border-radius-sm: 6px;
+  --border-radius-md: 10px;
+  --border-radius-lg: 15px;
+  --border-radius-xl: 20px;
+  
+  /* Transitions */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+}
+
+/* ========== Global Reset & Base Styles ========== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: var(--text-primary);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  padding: 20px;
+}
+
+/* ========== Container & Layout ========== */
+.container-fluid {
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ========== Card Components ========== */
+.mh-card {
+  background: var(--card-bg);
+  border: none;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.mh-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+}
+
+/* ========== Header Styles ========== */
+.mh-header {
+  background: linear-gradient(135deg, var(--mh-primary) 0%, var(--mh-secondary) 100%);
+  color: white;
+  border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+  padding: 1.5rem 2rem !important;
+  margin-bottom: 0;
+}
+
+.mh-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+  color: white;
+}
+
+.mh-header p {
+  font-size: 0.95rem;
+  opacity: 0.9;
+  margin-bottom: 0;
+}
+
+/* ========== Section Titles ========== */
+.mh-section-title {
+  color: var(--mh-primary);
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-left: 4px solid var(--mh-accent);
+  padding-left: 15px;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ========== Button Styles ========== */
+.btn {
+  font-weight: 600;
+  border-radius: var(--border-radius-md);
+  transition: all var(--transition-normal);
+  border: none;
+}
+
+.btn-lg {
+  padding: 0.75rem 1.75rem;
+  font-size: 1rem;
+}
+
+.mh-btn-primary {
+  background: linear-gradient(135deg, var(--mh-accent) 0%, #2980b9 100%);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-md);
+  padding: 0.75rem 1.75rem;
+  font-weight: 600;
+  transition: all var(--transition-normal);
+}
+
+.mh-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+  background: linear-gradient(135deg, #2980b9 0%, var(--mh-accent) 100%);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--mh-success) 0%, #229954 100%);
+  color: white;
+  border: none;
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #229954 0%, var(--mh-success) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+}
+
+.btn-warning {
+  background: linear-gradient(135deg, var(--mh-warning) 0%, #e67e22 100%);
+  color: white;
+  border: none;
+}
+
+.btn-warning:hover {
+  background: linear-gradient(135deg, #e67e22 0%, var(--mh-warning) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+}
+
+.btn-outline-danger {
+  border: 2px solid var(--mh-danger);
+  color: var(--mh-danger);
+  background: transparent;
+}
+
+.btn-outline-danger:hover {
+  background: var(--mh-danger);
+  color: white;
+  border-color: var(--mh-danger);
+}
+
+.btn-outline-secondary {
+  border: 2px solid var(--text-muted);
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.btn-outline-secondary:hover {
+  background: var(--text-muted);
+  color: white;
+  border-color: var(--text-muted);
+}
+
+.btn-outline-primary {
+  border: 2px solid var(--mh-accent);
+  color: var(--mh-accent);
+  background: transparent;
+}
+
+.btn-outline-primary:hover {
+  background: var(--mh-accent);
+  color: white;
+  border-color: var(--mh-accent);
+}
+
+/* ========== Chip Info Badge ========== */
+.mh-chip-info {
+  background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-mid) 100%);
+  color: white;
+  border-radius: 20px;
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ========== Form Controls ========== */
+.form-control,
+.form-select {
+  border: 2px solid #e0e0e0;
+  border-radius: var(--border-radius-md);
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  transition: all var(--transition-normal);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--mh-accent);
+  box-shadow: 0 0 0 0.25rem rgba(52, 152, 219, 0.15);
+  outline: none;
+}
+
+.form-control-lg,
+.form-select-lg {
+  padding: 0.875rem 1.25rem;
+  font-size: 1.05rem;
+}
+
+.form-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ========== File Drop Zone ========== */
+.mh-file-drop {
+  border: 3px dashed var(--mh-accent);
+  border-radius: var(--border-radius-lg);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background: #f8f9fa;
+  transition: all var(--transition-normal);
+  cursor: pointer;
+  position: relative;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.mh-file-drop:hover {
+  background: #e3f2fd;
+  border-color: #2980b9;
+  transform: scale(1.01);
+}
+
+.mh-file-drop.dragover {
+  background: rgba(39, 174, 96, 0.1);
+  border-color: var(--mh-success);
+  border-style: solid;
+}
+
+.mh-file-drop i {
+  font-size: 3rem;
+  color: var(--mh-accent);
+  margin-bottom: 1rem;
+}
+
+.mh-file-drop h5 {
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.mh-file-drop p {
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+/* ========== Hardware Info Panel ========== */
+#hardwareInfo {
+  background: #f8f9fa;
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  border: 1px solid #e0e0e0;
+}
+
+#hardwareInfo small {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+#hardwareInfo .fw-semibold {
+  color: var(--text-primary);
+  font-size: 1rem;
+}
+
+/* ========== Progress Bar ========== */
+.mh-progress {
+  height: 12px;
+  border-radius: 6px;
+  background: #f5f5f5;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mh-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--mh-success) 0%, #2ecc71 100%);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.mh-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background-image: linear-gradient(
+    -45deg,
+    transparent 33%,
+    rgba(255, 255, 255, 0.3) 33%,
+    rgba(255, 255, 255, 0.3) 66%,
+    transparent 66%
+  );
+  background-size: 35px 20px;
+  animation: progress-animation 2s linear infinite;
+}
+
+@keyframes progress-animation {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 35px 0;
+  }
+}
+
+/* ========== Log Terminal ========== */
+.mh-log-terminal {
+  background: #1a1a1a;
+  color: #00ff9d;
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  min-height: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #333;
+  line-height: 1.5;
+  font-size: 0.9rem;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.mh-log-terminal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.mh-log-terminal::-webkit-scrollbar-track {
+  background: #2a2a2a;
+  border-radius: 4px;
+}
+
+.mh-log-terminal::-webkit-scrollbar-thumb {
+  background: var(--mh-accent);
+  border-radius: 4px;
+}
+
+.mh-log-terminal::-webkit-scrollbar-thumb:hover {
+  background: #2980b9;
+}
+
+/* ========== Firmware Details ========== */
+.firmware-details {
+  background: linear-gradient(135deg, rgba(52, 152, 219, 0.05) 0%, rgba(41, 128, 185, 0.05) 100%);
+  border-left: 4px solid var(--mh-accent);
+  padding: 1.25rem;
+  border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+  margin-top: 1rem;
+}
+
+#firmwareName {
+  color: var(--mh-primary);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+#firmwareDescription {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+/* ========== Status Indicators ========== */
+.status-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: pulse 2s infinite;
+}
+
+.status-connected {
+  background-color: var(--status-connected);
+  box-shadow: 0 0 10px var(--status-connected);
+}
+
+.status-disconnected {
+  background-color: var(--status-disconnected);
+  box-shadow: 0 0 10px var(--status-disconnected);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ========== Footer Styles ========== */
+.mh-footer {
+  background: var(--mh-dark);
+  color: white;
+  padding: 1.5rem;
+  border-radius: var(--border-radius-lg);
+  margin-top: 2rem;
+}
+
+.mh-footer h5 {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.mh-footer a {
+  color: white;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.mh-footer a:hover {
+  color: var(--mh-accent);
+}
+
+.mh-footer .small {
+  opacity: 0.8;
+}
+
+/* ========== Badge Styles ========== */
+.badge {
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+}
+
+.badge.bg-secondary {
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%) !important;
+}
+
+.badge.bg-info {
+  background: linear-gradient(135deg, var(--mh-accent) 0%, #2980b9 100%) !important;
+}
+
+/* ========== Utility Classes ========== */
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+.text-primary {
+  color: var(--mh-primary) !important;
+}
+
+.text-info {
+  color: var(--mh-accent) !important;
+}
+
+.text-success {
+  color: var(--mh-success) !important;
+}
+
+.text-danger {
+  color: var(--mh-danger) !important;
+}
+
+.fw-semibold {
+  font-weight: 600 !important;
+}
+
+.fw-bold {
+  font-weight: 700 !important;
+}
+
+.opacity-75 {
+  opacity: 0.75;
+}
+
+/* ========== Responsive Design ========== */
+
+/* Large Desktop */
+@media (min-width: 1400px) {
+  .container-fluid {
+    max-width: 1500px;
+  }
+  
+  .mh-log-terminal {
+    min-height: 250px;
+    max-height: 350px;
+  }
+}
+
+/* Desktop */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .mh-log-terminal {
+    min-height: 220px;
+    max-height: 300px;
+  }
+}
+
+/* Tablet */
+@media (max-width: 991px) {
+  body {
+    padding: 15px;
+  }
+  
+  .mh-header {
+    padding: 1.25rem 1.5rem !important;
+  }
+  
+  .mh-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .btn-lg {
+    padding: 0.65rem 1.5rem;
+    font-size: 0.95rem;
+  }
+  
+  .mh-file-drop {
+    padding: 2rem 1rem;
+    min-height: 160px;
+  }
+  
+  .mh-log-terminal {
+    min-height: 180px;
+    max-height: 250px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+    font-size: 14px;
+  }
+  
+  .mh-header {
+    padding: 1rem !important;
+  }
+  
+  .mh-header h1 {
+    font-size: 1.25rem;
+  }
+  
+  .mh-section-title {
+    font-size: 1rem;
+    padding-left: 12px;
+  }
+  
+  .btn-lg {
+    padding: 0.6rem 1.25rem;
+    font-size: 0.9rem;
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
+  .mh-chip-info {
+    font-size: 0.9rem;
+    padding: 0.4rem 1rem;
+  }
+  
+  .form-control-lg,
+  .form-select-lg {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+  }
+  
+  .mh-file-drop {
+    padding: 1.5rem 1rem;
+    min-height: 140px;
+  }
+  
+  .mh-file-drop i {
+    font-size: 2.5rem;
+  }
+  
+  .mh-log-terminal {
+    padding: 1rem;
+    min-height: 160px;
+    max-height: 220px;
+    font-size: 0.85rem;
+  }
+  
+  .mh-footer {
+    padding: 1.25rem;
+    text-align: center;
+  }
+  
+  .mh-footer .row > div {
+    margin-bottom: 1rem;
+  }
+}
+
+/* Small Mobile */
+@media (max-width: 576px) {
+  .mh-header {
+    text-align: center;
+  }
+  
+  .mh-chip-info {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .mh-file-drop h5 {
+    font-size: 1rem;
+  }
+  
+  .mh-file-drop p {
+    font-size: 0.9rem;
+  }
+  
+  .mh-log-terminal {
+    min-height: 140px;
+    max-height: 200px;
+  }
+}
+
+/* ========== Animations ========== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mh-card {
+  animation: slideIn 0.5s ease;
+}
+
+.firmware-details,
+#hardwareInfo {
+  animation: fadeIn 0.3s ease;
+}
+
+/* ========== Print Styles ========== */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  .mh-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+  
+  .btn,
+  .mh-file-drop,
+  .mh-log-terminal {
+    display: none !important;
+  }
+}

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MINH HOÀNG CƠ ĐIỆN TỬ - ESP32 Web Flasher</title>
+
+    <!-- Google Fonts - Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5.0 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Main Card -->
+        <div class="mh-card">
+            <!-- Header -->
+            <div class="mh-header">
+                <div class="row align-items-center">
+                    <div class="col-lg-8 col-md-7 mb-3 mb-md-0">
+                        <h1 class="fw-bold">
+                            <i class="bi bi-cpu-fill me-2"></i>MINH HOÀNG CƠ ĐIỆN TỬ
+                        </h1>
+                        <p class="mb-0 opacity-75">
+                            <i class="bi bi-tools me-1"></i>Công cụ nạp Firmware Chatbox XiaoZhi AI
+                        </p>
+                    </div>
+                    <div class="col-lg-4 col-md-5">
+                        <div class="d-flex flex-column flex-md-row align-items-center justify-content-md-end gap-3">
+                      <div class="mh-chip-info" id="chipInfoContainer">
+                            <span class="status-indicator status-disconnected"></span>
+                            <span id="chipInfoText">Chưa kết nối</span>
+                        </div>
+                            <button id="connectBtn" class="btn btn-light mh-btn-primary">
+                                <i class="bi bi-usb-plug me-2"></i>Kết nối
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="p-4">
+                <!-- Firmware Selection Section -->
+                <div class="mb-4">
+                    <h3 class="mh-section-title">
+                        <i class="bi bi-file-earmark-binary me-2"></i>Lựa chọn Firmware
+                    </h3>
+                    <div class="row g-3">
+                        <div class="col-xl-8 col-lg-7">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-list-ul me-2"></i>Chọn từ thư viện firmware
+                            </label>
+                            <select id="firmwareList" class="form-select form-select-lg">
+                                <option value="">-- Đang tải danh sách firmware... --</option>
+                            </select>
+                        </div>
+                        <div class="col-xl-4 col-lg-5">
+                            <label class="form-label fw-semibold">
+                                <i class="bi bi-geo-alt me-2"></i>Địa chỉ Flash
+                            </label>
+                            <input type="text" id="flashAddress" value="0x00000" 
+                                   class="form-control form-control-lg" placeholder="0x00000">
+                        </div>
+                    </div>
+                    
+                    <!-- Firmware Details -->
+                    <div id="firmwareInfo" class="firmware-details mt-3 d-none">
+                        <div class="row align-items-center">
+                            <div class="col-lg-8 col-md-7 mb-3 mb-md-0">
+                                <h5 class="fw-bold text-primary mb-1" id="firmwareName"></h5>
+                                <p class="text-muted mb-2 small" id="firmwareDescription"></p>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-hdd me-1"></i><span id="firmwareSize"></span>
+                                    </span>
+                                    <span class="badge bg-info">
+                                        <i class="bi bi-tag me-1"></i>V<span id="firmwareVersion"></span>
+                                    </span>
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-geo-alt me-1"></i><span id="firmwareAddress"></span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-5 text-lg-end text-md-end">
+                                <button id="clearFirmwareInfo" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-x-lg me-1"></i>Ẩn thông tin
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload and Hardware Info Section -->
+                <div class="row g-4 mb-4">
+                    <!-- Upload Section -->
+                    <div class="col-xl-6 col-lg-6">
+                        <h3 class="mh-section-title">
+                            <i class="bi bi-cloud-upload me-2"></i>Upload Firmware
+                        </h3>
+                        <div class="mh-file-drop" id="fileDrop">
+                            <input id="fileInput" type="file" accept=".bin" style="display:none">
+                            <i class="bi bi-cloud-arrow-up-fill fs-1 text-primary mb-3"></i>
+                            <h5>Kéo thả file .bin vào đây</h5>
+                            <p class="text-muted small mb-3">Hoặc click để chọn file</p>
+                            <button id="browseBtn" class="btn btn-outline-primary">
+                                <i class="bi bi-folder2-open me-2"></i>Chọn file
+                            </button>
+                            <div id="fileName" class="mt-3 text-success small fw-semibold"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Hardware Info Section -->
+                    <div class="col-xl-6 col-lg-6">
+                        <h3 class="mh-section-title">
+                            <i class="bi bi-cpu me-2"></i>Thông tin phần cứng
+                        </h3>
+                        <div id="hardwareInfo" class="p-3">
+                            <div class="row mb-3">
+                                <div class="col-md-6 mb-2 mb-md-0">
+                                    <small class="text-muted d-block mb-1"><i class="bi bi-motherboard me-1"></i>Chip:</small>
+                                    <div class="fw-semibold text-primary" id="hardwareChip">--</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <small class="text-muted d-block mb-1"><i class="bi bi-memory me-1"></i>Flash Size:</small>
+                                    <div class="fw-semibold text-primary" id="hardwareFlashSize">--</div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1"><i class="bi bi-check-circle me-1"></i>Board tương thích:</small>
+                                <div class="fw-semibold text-success" id="hardwareBoards">--</div>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted d-block mb-1"><i class="bi bi-diagram-3 me-1"></i>Sơ đồ đấu nối:</small>
+                                <div>
+                                    <a href="#" id="schematicLink" target="_blank" class="text-decoration-none text-info">
+                                        <i class="bi bi-box-arrow-up-right me-1"></i>Xem sơ đồ
+                                    </a>
+                                </div>
+                            </div>
+                            <div id="hardwareSpecialFeatures" class="d-none">
+                                <small class="text-muted d-block mb-1"><i class="bi bi-star me-1"></i>Tính năng đặc biệt:</small>
+                                <div class="text-warning fw-semibold" id="specialFeaturesList"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Flash Controls Section -->
+                <div class="mb-4">
+                    <h3 class="mh-section-title">
+                        <i class="bi bi-lightning-charge me-2"></i>Điều khiển nạp firmware
+                    </h3>
+                    <div class="d-flex flex-wrap gap-3 mb-4">
+                        <button id="flashBtn" class="btn btn-success btn-lg mh-btn-primary" disabled>
+                            <i class="bi bi-lightning-charge-fill me-2"></i>Bắt đầu nạp
+                        </button>
+                        <button id="eraseBtn" class="btn btn-warning btn-lg" disabled>
+                            <i class="bi bi-eraser-fill me-2"></i>Xoá Flash
+                        </button>
+                        <button id="disconnectBtn" class="btn btn-outline-danger btn-lg" disabled>
+                            <i class="bi bi-plug me-2"></i>Ngắt kết nối
+                        </button>
+                    </div>
+                    
+                    <!-- Flash Status Notification -->
+                    <div id="flashStatusNotification" class="alert alert-info d-none mb-3" role="alert">
+                        <div class="d-flex align-items-center">
+                            <div class="spinner-border spinner-border-sm me-3" role="status">
+                                <span class="visually-hidden">Đang tải...</span>
+                            </div>
+                            <div>
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Bắt đầu ghi flash, vui lòng chờ đến khi có thông báo hoàn thành...</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Section -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h3 class="mh-section-title mb-0">
+                            <i class="bi bi-graph-up me-2"></i>Tiến trình nạp
+                        </h3>
+                        <div class="text-end">
+                            <div class="fw-bold text-primary fs-5" id="percent">0%</div>
+                            <div id="speedInfo" class="text-muted small">
+                                <i class="bi bi-speedometer2 me-1"></i>Tốc độ: --
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mh-progress mb-3">
+                        <div id="progress" class="mh-progress-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Log Section -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h3 class="mh-section-title mb-0">
+                            <i class="bi bi-terminal me-2"></i>Log Console
+                        </h3>
+                        <div class="d-flex gap-2">
+                            <button id="clearLogBtn" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-eraser me-2"></i>Xoá Log
+                            </button>
+                            <button id="openOfficialBtn" class="btn btn-outline-info btn-sm">
+                                <i class="bi bi-link-45deg me-2"></i>ESP Tool
+                            </button>
+                        </div>
+                    </div>
+                    <pre id="log" class="mh-log-terminal">MINH HOÀNG CƠ ĐIỆN TỬ Flasher - Sẵn sàng kết nối...</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mh-footer">
+            <div class="row align-items-center">
+                <div class="col-lg-6 col-md-6 mb-3 mb-md-0">
+                    <h5 class="fw-bold mb-1">
+                        <i class="bi bi-shield-check me-2"></i>MINH HOÀNG CƠ ĐIỆN TỬ
+                    </h5>
+                    <p class="mb-0 small opacity-75">Công cụ nạp firmware ESP32</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5.0 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+
+    <!-- External Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
+
+    <!-- Main Application Script -->
+    <script type="module" src="scripts.js?v=1.0.0"></script>
+    
+    <script>
+        // Thêm hiệu ứng cho file drop
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileDrop = document.getElementById('fileDrop');
+            const fileInput = document.getElementById('fileInput');
+            const browseBtn = document.getElementById('browseBtn');
+            
+            // Khi click vào nút chọn file
+            browseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                fileInput.click();
+            });
+            
+            // Khi click vào vùng drop
+            fileDrop.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            // Hiệu ứng khi kéo file vào
+            fileDrop.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileDrop.classList.add('dragover');
+            });
+            
+            fileDrop.addEventListener('dragleave', () => {
+                fileDrop.classList.remove('dragover');
+            });
+            
+            fileDrop.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileDrop.classList.remove('dragover');
+                
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    const event = new Event('change', { bubbles: true });
+                    fileInput.dispatchEvent(event);
+                }
+            });
+            
+            // Hiển thị tên file khi chọn
+            fileInput.addEventListener('change', function() {
+                const fileName = document.getElementById('fileName');
+                if (this.files && this.files[0]) {
+                    fileName.textContent = `Đã chọn: ${this.files[0].name}`;
+                } else {
+                    fileName.textContent = '';
+                }
+            });
+            
+            // Thêm hiệu ứng khi hover vào các nút
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('mouseenter', function() {
+                    this.style.transform = 'translateY(-2px)';
+                });
+                
+                btn.addEventListener('mouseleave', function() {
+                    this.style.transform = 'translateY(0)';
+                });
+            });
+            
+            // Cập nhật trạng thái chip info
+            function updateChipStatus(connected, chipInfo = '') {
+                const chipInfoElement = document.getElementById('chipInfo');
+                const statusIndicator = chipInfoElement.querySelector('.status-indicator');
+                
+                if (connected) {
+                    chipInfoElement.textContent = chipInfo || 'Đã kết nối';
+                    chipInfoElement.innerHTML = `<span class="status-indicator status-connected"></span>${chipInfo || 'Đã kết nối'}`;
+                } else {
+                    chipInfoElement.textContent = 'Chưa kết nối';
+                    chipInfoElement.innerHTML = `<span class="status-indicator status-disconnected"></span>Chưa kết nối`;
+                }
+            }
+            
+            // Khởi tạo
+            updateChipStatus(false);
+        });
+    </script>
+</body>
+</html>
